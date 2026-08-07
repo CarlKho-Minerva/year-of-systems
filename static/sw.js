@@ -8,7 +8,7 @@
  *     actually lost is exactly the "silence is the bug" failure, so writes are allowed to
  *     fail loudly and the UI reports it.
  */
-const VERSION = 'yos-v1';
+const VERSION = 'yos-v2';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js',
                '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-180.png'];
 
@@ -30,7 +30,10 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== location.origin) return;
   if (url.pathname.startsWith('/api/export')) return; // downloads must never be cached
 
-  if (url.pathname === '/api/state') {
+  // State, the course tree, and individual lessons all read the same way: fresh when
+  // online, last-known when not. This is what makes a lesson readable on a plane.
+  if (url.pathname === '/api/state' || url.pathname === '/api/course'
+      || url.pathname.startsWith('/api/lesson/')) {
     e.respondWith(
       fetch(req)
         .then((res) => {

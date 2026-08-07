@@ -76,6 +76,33 @@ registers and the app opens instantly with no signal. Over plain `http://` on th
 will not register — Add to Home Screen still works, the app just needs the network. That
 failure is logged to the console and swallowed; it never takes the app down.
 
+## The course reader
+
+The **Course** tab holds the lessons: modules → lessons → body text, video link,
+downloadable assets, and a notes field per lesson. Each lesson can be linked to a week,
+so the lesson and its "did I actually install this" state are one record. Lessons are
+deep-linkable (`#course/12`) and read offline once cached.
+
+**Lesson content lives in SQLite on the zone and never in this repo.** The repo is
+public and the lesson text is not mine or yours to redistribute. This is structural, not
+a convention: no code path writes a lesson body to a file in the repo, and
+`/api/export-notes.md` deliberately exports *your notes only*, with lesson titles for
+context, so an export can never carry the course text into the vault or a commit.
+
+Re-importing after the course is updated **never overwrites your notes.** Lessons are
+matched on `source_url`, so a re-scrape updates titles and bodies in place and leaves
+your writing and week links untouched. That is the one irreplaceable thing in the
+database, and the import is built so it cannot be destroyed by a re-run.
+
+```bash
+POST /api/course/import
+{"modules":[{"title":"...","lessons":[
+  {"title":"...","body":"...","video_url":"...","source_url":"...",
+   "assets":[{"name":"Workbook","url":"..."}]}]}]}
+```
+
+The response reports `lessons_new`, `lessons_updated`, and `notes_preserved`.
+
 ## Loading your own 52 systems
 
 Weeks 1–7 ship filled in as **generic starter examples** — one per category, so nothing

@@ -12,12 +12,23 @@
 'use strict';
 
 const CACHE_KEY = 'yos.state.v1';
-const VIEWS = ['now', 'year', 'library', 'settings'];
+const COURSE_KEY = 'yos.course.v1';
+const VIEWS = ['now', 'course', 'year', 'library', 'settings'];
 let S = null;              // current state
-// The tab lives in the URL hash so a tab is linkable, the phone's back gesture works,
-// and the home-screen icon can be pinned straight to a tab if you ever want that.
-let view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'now';
+/* The tab lives in the URL hash so a tab is linkable, the phone's back gesture works, and
+ * the home-screen icon can be pinned straight to a tab. A lesson is `#course/12`, which
+ * means an individual lesson is bookmarkable and shareable-to-self. */
+function parseHash() {
+  const [v, id] = location.hash.slice(1).split('/');
+  return {
+    view: VIEWS.includes(v) ? v : 'now',
+    lessonId: v === 'course' && /^\d+$/.test(id || '') ? Number(id) : null,
+  };
+}
+let view = parseHash().view;
 let editing = null;        // week number being edited, or null
+let C = null;              // course tree (modules + lesson stubs), lazily loaded
+let openLesson = null;     // full lesson object currently being read, or null
 
 // ---------------------------------------------------------------- utils
 
@@ -92,7 +103,8 @@ function render() {
   const root = $('#view');
   root.innerHTML = '';
   root.scrollTop = 0;
-  ({ now: viewNow, year: viewYear, library: viewLibrary, settings: viewSettings }[view])(root);
+  ({ now: viewNow, course: viewCourse, year: viewYear,
+     library: viewLibrary, settings: viewSettings }[view])(root);
   window.scrollTo(0, 0);
 }
 
@@ -191,6 +203,133 @@ function viewNow(root) {
       root.append(wrap);
     });
   }
+}
+
+// ---------------------------------------------------------------- course reader
+
+/* The course tree is fetched lazily and cached, because it is the one view that is
+ * useless without a network round-trip on first use but perfectly readable from cache
+ * afterwards — which is the whole point of reading lessons on a train. */
+async function loadCourse(force) {
+  if (C && !force) return C;
+  try {
+    C = await api('/api/course');
+    localStorage.setItem(COURSE_KEY, JSON.stringify(C));
+    setOffline(false);
+  } catch (e) {
+    const cached = localStorage.getItem(COURSE_KEY);
+    if (!cached) throw e;
+    C = JSON.parse(cached);
+    setOffline(true);
+  }
+  return C;
+}
+
+function viewCourse(root) {
+  if (openLesson) return viewLesson(root, openLesson);
+
+  root.append(el('h1', { textContent: 'Course' }));
+  const sub = el('p', { className: 'sub', textContent: 'Loading…' });
+  root.append(sub);
+  const holder = el('div');
+  root.append(holder);
+
+  loadCourse().then((c) => {
+    if (!c.modules.length) {
+      sub.textContent = 'Nothing imported yet.';
+      holder.append(el('p', { className: 'empty', textContent:
+        'The lessons live in this app’s database, never in the git repo. '
+        + 'Once they are imported they read offline, and each one gets its own notes field.' }));
+      return;
+    }
+    sub.textContent = c.stats.lessons + ' lessons in ' + c.stats.modules + ' modules · '
+      + c.stats.with_notes + ' annotated';
+    c.modules.forEach((m) => {
+      holder.append(el('h2', { textContent: m.title }));
+      m.lessons.forEach((l) => {
+        const b = el('button', { className: 'list-item', type: 'button' });
+        b.style.setProperty('--hue', 210);
+        b.append(el('span', { className: 'wk', textContent: l.week ? 'W' + l.week : '·' }));
+        b.append(el('span', { className: 'ttl', textContent: l.title }));
+        const marks = [];
+        if (l.has_video) marks.push('▶');
+        if (l.assets) marks.push('⎘' + l.assets);
+        if (l.has_notes) marks.push('✎');
+        if (marks.length) b.append(el('span', { className: 'marks', textContent: marks.join(' ') }));
+        b.addEventListener('click', () => openLessonById(l.id));
+        holder.append(b);
+      });
+    });
+  }).catch((e) => {
+    sub.textContent = '';
+    holder.append(el('p', { className: 'empty', textContent: 'Could not load the course: ' + e.message }));
+  });
+}
+
+async function openLessonById(id) {
+  try {
+    openLesson = await api('/api/lesson/' + id);
+    if (location.hash !== '#course/' + id) location.hash = 'course/' + id;
+    render();
+  } catch (e) {
+    toast('Could not open lesson: ' + e.message, true);
+  }
+}
+
+function viewLesson(root, l) {
+  root.append(btn('‹ ' + (l.module_title || 'Course'), 'ghost', () => { openLesson = null; render(); }));
+  root.append(el('h1', { textContent: l.title }));
+
+  const meta = el('div', { className: 'row' });
+  if (l.video_url) meta.append(extLink('▶ Watch', l.video_url));
+  (l.assets || []).forEach((a) => meta.append(extLink('⎘ ' + (a.name || 'asset'), a.url)));
+  if (l.source_url) meta.append(extLink('Open original', l.source_url));
+  if (meta.children.length) root.append(meta);
+
+  if (l.body) {
+    const card = el('div', { className: 'card' });
+    // Rendered as text, not HTML. The body is scraped from a third-party page, and
+    // injecting it as markup would make any script or tracker in that page run here.
+    card.append(el('div', { className: 'body', textContent: l.body }));
+    root.append(card);
+  } else {
+    root.append(el('p', { className: 'empty', textContent: 'No text captured for this lesson — use "Open original".' }));
+  }
+
+  const nc = el('div', { className: 'card' });
+  const ta = field(nc, 'Your notes', el('textarea', { value: l.notes || '' }));
+  ta.style.minHeight = '160px';
+
+  const wk = el('select');
+  wk.append(el('option', { value: '', textContent: '— not linked —', selected: !l.week }));
+  for (let i = 1; i <= 52; i++) {
+    wk.append(el('option', { value: String(i), textContent: 'Week ' + i, selected: l.week === i }));
+  }
+  field(nc, 'Link to a week in the tracker', wk);
+
+  const row = el('div', { className: 'row' });
+  row.append(btn('Save notes', 'primary', async () => {
+    try {
+      openLesson = await api('/api/lesson/' + l.id, { notes: ta.value, week: wk.value || null });
+      C = null;                       // stub counts (✎, week badge) are now stale
+      toast('Saved');
+      render();
+    } catch (e) { toast('Not saved: ' + e.message, true); }
+  }));
+  nc.append(row);
+  root.append(nc);
+
+  const nav = el('div', { className: 'row' });
+  if (l.prev_id) nav.append(btn('‹ Previous', '', () => openLessonById(l.prev_id)));
+  if (l.next_id) nav.append(btn('Next ›', '', () => openLessonById(l.next_id)));
+  if (nav.children.length) root.append(nav);
+}
+
+function extLink(label, href) {
+  // noopener/noreferrer: these point at pages this app does not control.
+  const a = el('a', { href, className: 'btn', textContent: label, target: '_blank', rel: 'noopener noreferrer' });
+  a.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none';
+  return a;
 }
 
 function viewYear(root) {
@@ -332,8 +471,13 @@ function viewSettings(root) {
   root.append(el('p', { className: 'sub', textContent: 'Nothing here is trapped. Markdown drops straight into the vault.' }));
   const ex = el('div', { className: 'row' });
   ex.style.marginTop = '0';
-  ex.append(link('Markdown', '/api/export.md'), link('JSON', '/api/export.json'));
+  ex.append(link('Systems', '/api/export.md'),
+            link('Course notes', '/api/export-notes.md'),
+            link('JSON', '/api/export.json'));
   root.append(ex);
+  root.append(el('p', { className: 'sub', textContent:
+    'Course notes export your writing only. Lesson text stays in this database — it is not '
+    + 'yours to redistribute, and the repo is public.' }));
 
   root.append(el('h2', { textContent: 'About' }));
   root.append(el('p', { className: 'sub' , textContent:
@@ -354,6 +498,7 @@ function link(label, href) {
 function go(next) {
   view = next;
   editing = null;
+  openLesson = null;
   if (location.hash.slice(1) !== next) location.hash = next;
   render();
 }
@@ -362,9 +507,18 @@ document.querySelectorAll('.tab').forEach((t) =>
   t.addEventListener('click', () => go(t.dataset.view)));
 
 window.addEventListener('hashchange', () => {
-  const h = location.hash.slice(1);
-  if (VIEWS.includes(h) && h !== view) { view = h; editing = null; render(); }
+  const h = parseHash();
+  if (h.lessonId && h.lessonId !== (openLesson && openLesson.id)) {
+    view = 'course';
+    return void openLessonById(h.lessonId);
+  }
+  if (!h.lessonId && openLesson) { openLesson = null; view = h.view; return render(); }
+  if (h.view !== view) { view = h.view; editing = null; openLesson = null; render(); }
 });
+
+// A deep link to a lesson must survive a cold start, so resolve it once after boot.
+const _boot = parseHash();
+if (_boot.lessonId) openLessonById(_boot.lessonId);
 
 load().catch((e) => {
   $('#view').innerHTML = '';
@@ -376,8 +530,12 @@ load().catch((e) => {
 
 // Refresh when the phone brings the app back to the foreground — day boundaries and the
 // review queue both move while it is backgrounded.
+// Never refresh while a text field is open — a background reload that re-renders the
+// view would throw away notes typed but not yet saved.
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && editing == null) load().catch(() => setOffline(true));
+  if (!document.hidden && editing == null && openLesson == null) {
+    load().catch(() => setOffline(true));
+  }
 });
 
 if ('serviceWorker' in navigator) {

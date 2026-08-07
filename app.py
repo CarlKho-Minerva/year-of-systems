@@ -86,6 +86,33 @@ def init_db():
         updated_at   TEXT
     );
     CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+
+    -- The course reader. Content lives HERE, in SQLite on the zone, and never in the
+    -- git repo: the repo is public, and the lesson text is Ben Meer's copyrighted
+    -- material. Keeping the two apart is a structural guarantee, not a habit to
+    -- remember — there is no code path that writes a lesson body to a file in the repo.
+    CREATE TABLE IF NOT EXISTS modules (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        position INTEGER NOT NULL DEFAULT 0,
+        title    TEXT NOT NULL,
+        source_url TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS lessons (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        module_id INTEGER NOT NULL REFERENCES modules(id) ON DELETE CASCADE,
+        position  INTEGER NOT NULL DEFAULT 0,
+        title     TEXT NOT NULL,
+        body      TEXT NOT NULL DEFAULT '',
+        video_url TEXT NOT NULL DEFAULT '',
+        assets    TEXT NOT NULL DEFAULT '[]',  -- json: [{"name":..,"url":..}]
+        source_url TEXT NOT NULL DEFAULT '',
+        week      INTEGER,                     -- optional link into systems.week
+        notes     TEXT NOT NULL DEFAULT '',
+        updated_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS lessons_by_module ON lessons(module_id, position);
+    CREATE UNIQUE INDEX IF NOT EXISTS lessons_by_source ON lessons(source_url)
+        WHERE source_url <> '';
     """)
     db.commit()
 
@@ -251,6 +278,189 @@ def update_system(week: int, patch: dict):
         db.close()
 
 
+# ---------------------------------------------------------------- course reader
+
+def course_tree():
+    """Modules + lesson stubs. Deliberately omits lesson bodies.
+
+    The whole course is far too big to ship to a phone on every tab switch, and the list
+    view never needs the text. Bodies are fetched one lesson at a time.
+    """
+    db = connect()
+    mods = [dict(r) for r in db.execute("SELECT * FROM modules ORDER BY position, id")]
+    rows = db.execute(
+        "SELECT id, module_id, position, title, week, video_url,"
+        " length(body) AS body_len, length(notes) AS notes_len, assets"
+        " FROM lessons ORDER BY position, id").fetchall()
+    db.close()
+    by_mod = {}
+    for r in rows:
+        by_mod.setdefault(r["module_id"], []).append({
+            "id": r["id"], "position": r["position"], "title": r["title"],
+            "week": r["week"], "has_video": bool(r["video_url"]),
+            "has_body": bool(r["body_len"]), "has_notes": bool(r["notes_len"]),
+            "assets": len(json.loads(r["assets"] or "[]")),
+        })
+    for m in mods:
+        m["lessons"] = by_mod.get(m["id"], [])
+    total = len(rows)
+    return {
+        "modules": mods,
+        "stats": {
+            "modules": len(mods), "lessons": total,
+            "with_body": sum(1 for r in rows if r["body_len"]),
+            "with_notes": sum(1 for r in rows if r["notes_len"]),
+        },
+    }
+
+
+def get_lesson(lid: int):
+    db = connect()
+    r = db.execute("SELECT * FROM lessons WHERE id=?", (lid,)).fetchone()
+    if r is None:
+        db.close()
+        raise KeyError(lid)
+    m = db.execute("SELECT title FROM modules WHERE id=?", (r["module_id"],)).fetchone()
+    sib = [dict(x) for x in db.execute(
+        "SELECT id, title FROM lessons WHERE module_id=? ORDER BY position, id",
+        (r["module_id"],))]
+    db.close()
+    d = dict(r)
+    d["assets"] = json.loads(d["assets"] or "[]")
+    d["module_title"] = m["title"] if m else ""
+    idx = next((i for i, x in enumerate(sib) if x["id"] == lid), -1)
+    d["prev_id"] = sib[idx - 1]["id"] if idx > 0 else None
+    d["next_id"] = sib[idx + 1]["id"] if 0 <= idx < len(sib) - 1 else None
+    return d
+
+
+def update_lesson(lid: int, patch: dict):
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _lock:
+        db = connect()
+        if db.execute("SELECT 1 FROM lessons WHERE id=?", (lid,)).fetchone() is None:
+            db.close()
+            raise KeyError(lid)
+        fields, vals = [], []
+        if "notes" in patch:
+            fields.append("notes=?")
+            vals.append(str(patch["notes"])[:100000])
+        if "week" in patch:
+            w = patch["week"]
+            if w in (None, "", 0):
+                fields.append("week=?")
+                vals.append(None)
+            else:
+                w = int(w)
+                if not 1 <= w <= 52:
+                    db.close()
+                    raise ValueError("week must be 1-52 or empty")
+                fields.append("week=?")
+                vals.append(w)
+        if not fields:
+            db.close()
+            return
+        fields.append("updated_at=?")
+        vals.extend([now, lid])
+        db.execute(f"UPDATE lessons SET {','.join(fields)} WHERE id=?", vals)
+        db.commit()
+        db.close()
+
+
+def import_course(body):
+    """Ingest a scraped course tree.
+
+    Notes are NEVER overwritten. A re-scrape after the course is updated must not be able
+    to destroy what Carl wrote — that is the one irreplaceable thing in this database.
+    Lessons are matched on source_url, so a re-run updates in place instead of duplicating.
+    """
+    mods = body.get("modules")
+    if not isinstance(mods, list):
+        raise ValueError('expected {"modules": [{"title":..,"lessons":[...]}, ...]}')
+    report = {"modules": 0, "lessons_new": 0, "lessons_updated": 0, "notes_preserved": 0}
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _lock:
+        db = connect()
+        for mi, m in enumerate(mods):
+            mtitle = str(m.get("title", "")).strip() or f"Module {mi + 1}"
+            murl = str(m.get("source_url", ""))
+            row = db.execute("SELECT id FROM modules WHERE title=?", (mtitle,)).fetchone()
+            if row:
+                mid = row["id"]
+                db.execute("UPDATE modules SET position=?, source_url=? WHERE id=?", (mi, murl, mid))
+            else:
+                cur = db.execute("INSERT INTO modules (position,title,source_url) VALUES (?,?,?)",
+                                 (mi, mtitle, murl))
+                mid = cur.lastrowid
+            report["modules"] += 1
+
+            for li, l in enumerate(m.get("lessons", [])):
+                ltitle = str(l.get("title", "")).strip() or f"Lesson {li + 1}"
+                lurl = str(l.get("source_url", ""))
+                assets = json.dumps([{"name": str(a.get("name", ""))[:200],
+                                      "url": str(a.get("url", ""))[:2000]}
+                                     for a in (l.get("assets") or [])][:50])
+                existing = db.execute(
+                    "SELECT id, notes FROM lessons WHERE source_url=? AND source_url<>''",
+                    (lurl,)).fetchone()
+                if existing is None:
+                    existing = db.execute(
+                        "SELECT id, notes FROM lessons WHERE module_id=? AND title=?",
+                        (mid, ltitle)).fetchone()
+                vals = (mid, li, ltitle, str(l.get("body", "")), str(l.get("video_url", "")),
+                        assets, lurl, now)
+                if existing:
+                    db.execute(
+                        "UPDATE lessons SET module_id=?, position=?, title=?, body=?,"
+                        " video_url=?, assets=?, source_url=?, updated_at=? WHERE id=?",
+                        vals + (existing["id"],))
+                    report["lessons_updated"] += 1
+                    if existing["notes"]:
+                        report["notes_preserved"] += 1
+                else:
+                    db.execute(
+                        "INSERT INTO lessons (module_id,position,title,body,video_url,"
+                        "assets,source_url,updated_at) VALUES (?,?,?,?,?,?,?,?)", vals)
+                    report["lessons_new"] += 1
+        db.commit()
+        db.close()
+    log.info("course import: %s", report)
+    report["course"] = course_tree()
+    return report
+
+
+def export_notes():
+    """Export YOUR notes, with lesson titles for context — not the lesson bodies.
+
+    Deliberate: the export is meant to land in the Obsidian vault, and the vault syncs to
+    iCloud and sits next to git repos. Carl's own writing belongs there. Ben Meer's
+    lesson text does not leave this database, so there is no way to accidentally commit
+    or publish it by running an export.
+    """
+    c = course_tree()
+    db = connect()
+    notes = {r["id"]: r["notes"] for r in db.execute("SELECT id, notes FROM lessons")}
+    db.close()
+    out = ["# Course notes", "",
+           f"Exported: {date.today().isoformat()}  ",
+           f"{c['stats']['with_notes']} of {c['stats']['lessons']} lessons annotated", "",
+           "> Your notes only. Lesson text stays in the app database and is not exported.", ""]
+    for m in c["modules"]:
+        wrote_header = False
+        for l in m["lessons"]:
+            body = (notes.get(l["id"]) or "").strip()
+            if not body:
+                continue
+            if not wrote_header:
+                out += [f"## {m['title']}", ""]
+                wrote_header = True
+            wk = f" (week {l['week']})" if l["week"] else ""
+            out += [f"### {l['title']}{wk}", "", body, ""]
+    if c["stats"]["with_notes"] == 0:
+        out += ["*No notes written yet.*", ""]
+    return "\n".join(out) + "\n"
+
+
 def export_markdown():
     """Markdown export exists because every other record Carl keeps is markdown.
 
@@ -340,6 +550,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "db": os.path.exists(DB_PATH)})
             if path == "/api/state":
                 return self._json(build_state())
+            if path == "/api/course":
+                return self._json(course_tree())
+            m = re.fullmatch(r"/api/lesson/(\d+)", path)
+            if m:
+                return self._json(get_lesson(int(m.group(1))))
             if path == "/api/export.json":
                 return self._send(200, json.dumps(build_state(), indent=2).encode(),
                                   "application/json",
@@ -347,7 +562,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/export.md":
                 return self._send(200, export_markdown().encode(), "text/markdown; charset=utf-8",
                                   {"Content-Disposition": 'attachment; filename="year-of-systems.md"'})
+            if path == "/api/export-notes.md":
+                return self._send(200, export_notes().encode(), "text/markdown; charset=utf-8",
+                                  {"Content-Disposition": 'attachment; filename="course-notes.md"'})
             return self._static(path)
+        except KeyError as e:
+            return self._err(404, f"no such lesson: {e}")
         except Exception as e:  # noqa: BLE001 - never 200 on an unhandled error
             log.exception("GET %s failed", path)
             return self._err(500, str(e))
@@ -385,6 +605,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(build_state())
             if p.path == "/api/import":
                 return self._json(do_import(body))
+            m = re.fullmatch(r"/api/lesson/(\d+)", p.path)
+            if m:
+                update_lesson(int(m.group(1)), body)
+                return self._json(get_lesson(int(m.group(1))))
+            if p.path == "/api/course/import":
+                return self._json(import_course(body))
             return self._err(404, "no such endpoint")
         except KeyError as e:
             return self._err(404, f"no such week: {e}")
