@@ -1,0 +1,199 @@
+/* Year of Systems — dark-first, iPhone-first. No webfonts: the system stack is already
+   installed, renders instantly, and keeps the app fully self-contained offline. */
+
+:root {
+  --bg: #0b0f14;
+  --surface: #131a22;
+  --surface-2: #1a232d;
+  --line: #26313d;
+  --text: #e8eef5;
+  --muted: #8b9bad;
+  --faint: #5b6b7d;
+  --accent: #f0b429;
+  --ok: #35c07f;
+  --drop: #6b7b8d;
+  --radius: 14px;
+  --tabbar-h: 56px;
+  font-size: 16px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f8fa; --surface: #fff; --surface-2: #eef2f6; --line: #dde5ed;
+    --text: #101821; --muted: #5b6b7d; --faint: #8b9bad; --drop: #94a3b4;
+  }
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  /* Standalone mode has no browser chrome to absorb the rubber band. */
+  overscroll-behavior-y: none;
+}
+
+.view {
+  padding: calc(env(safe-area-inset-top) + 14px) 16px
+           calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 28px);
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.boot { color: var(--muted); padding: 40px 0; text-align: center; }
+
+/* ---------------------------------------------------------------- nav */
+
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  flex: 1; height: var(--tabbar-h);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: none; border: 0; color: var(--faint);
+  font: inherit; font-size: .68rem; letter-spacing: .02em; cursor: pointer;
+}
+.tab .ico { font-size: 1.05rem; line-height: 1; }
+.tab[aria-selected="true"] { color: var(--accent); }
+
+/* ---------------------------------------------------------------- type */
+
+h1 { font-size: 1.5rem; margin: 0 0 2px; letter-spacing: -.02em; }
+h2 { font-size: 1.05rem; margin: 26px 0 10px; letter-spacing: -.01em; }
+.sub { color: var(--muted); font-size: .84rem; margin: 0 0 18px; }
+.eyebrow {
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .13em;
+  color: var(--faint); margin: 0 0 6px; font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- cards */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.card.hero { border-left: 3px solid hsl(var(--hue) 62% 55%); }
+
+.chip {
+  display: inline-block; font-size: .68rem; font-weight: 600;
+  padding: 3px 9px; border-radius: 999px;
+  background: hsl(var(--hue) 45% 50% / .16);
+  color: hsl(var(--hue) 62% 62%);
+  border: 1px solid hsl(var(--hue) 45% 50% / .3);
+}
+@media (prefers-color-scheme: light) {
+  .chip { color: hsl(var(--hue) 55% 32%); }
+}
+.chip.warn { background: #f0b42922; color: var(--accent); border-color: #f0b42955; }
+.chip.plain { background: var(--surface-2); color: var(--muted); border-color: var(--line); }
+
+.meta { color: var(--muted); font-size: .8rem; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.why { color: var(--text); opacity: .88; margin: 12px 0 0; font-size: .93rem; }
+
+/* ---------------------------------------------------------------- steps */
+
+.steps { list-style: none; padding: 0; margin: 14px 0 0; }
+.steps li { margin-bottom: 2px; }
+.steps label {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer; font-size: .9rem;
+}
+.steps label:active { background: var(--surface-2); }
+.steps input { margin: 3px 0 0; width: 18px; height: 18px; accent-color: var(--ok); flex: none; }
+.steps input:checked + span { color: var(--faint); text-decoration: line-through; }
+
+/* ---------------------------------------------------------------- buttons */
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+button.btn {
+  font: inherit; font-size: .88rem; font-weight: 600;
+  padding: 11px 16px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+  min-height: 44px;   /* Apple's minimum tap target. Below this it feels broken on a phone. */
+}
+button.btn:active { transform: scale(.985); }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1200; }
+button.btn.ghost { background: none; color: var(--muted); }
+button.btn.danger { color: #ff8a8a; }
+
+/* ---------------------------------------------------------------- grid */
+
+.grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-top: 6px; }
+@media (min-width: 560px) { .grid { grid-template-columns: repeat(13, 1fr); } }
+
+.cell {
+  aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--faint);
+  font: inherit; font-size: .66rem; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.cell.filled { color: hsl(var(--hue) 60% 62%); border-color: hsl(var(--hue) 45% 45% / .5); }
+.cell.installed {
+  background: hsl(var(--hue) 50% 45%); border-color: hsl(var(--hue) 50% 55%); color: #fff;
+}
+.cell.dropped { opacity: .38; text-decoration: line-through; }
+.cell.current { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 14px; font-size: .72rem; color: var(--muted); }
+.legend span { display: flex; align-items: center; gap: 5px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; background: hsl(var(--hue) 50% 48%); display: inline-block; }
+
+/* ---------------------------------------------------------------- stats */
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 20px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 10px; text-align: center; }
+.stat b { display: block; font-size: 1.4rem; letter-spacing: -.02em; }
+.stat small { color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; }
+
+/* ---------------------------------------------------------------- forms */
+
+label.field { display: block; margin: 14px 0 0; }
+label.field > span { display: block; font-size: .74rem; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+input[type=text], input[type=number], input[type=date], textarea, select {
+  width: 100%; font: inherit; font-size: 1rem;  /* < 16px makes iOS Safari zoom on focus. */
+  padding: 11px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+  -webkit-appearance: none; appearance: none;
+}
+textarea { min-height: 96px; resize: vertical; line-height: 1.55; }
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.empty { color: var(--faint); font-size: .88rem; padding: 22px 0; text-align: center; }
+
+.offline {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+  background: var(--accent); color: #1a1200;
+  font-size: .76rem; font-weight: 600; text-align: center;
+  padding: calc(env(safe-area-inset-top) + 5px) 8px 5px;
+}
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
+  z-index: 50; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 9px 18px; font-size: .82rem; box-shadow: 0 8px 28px #0008;
+}
+.toast.bad { background: #4a1d1d; border-color: #7a3030; color: #ffdede; }
+
+.list-item {
+  display: flex; gap: 12px; align-items: baseline;
+  padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); margin-bottom: 8px; cursor: pointer; width: 100%;
+  font: inherit; text-align: left; color: var(--text);
+}
+.list-item .wk { color: var(--faint); font-size: .72rem; font-variant-numeric: tabular-nums; flex: none; width: 26px; }
+.list-item .ttl { flex: 1; font-size: .92rem; }
+.list-item .dot { width: 8px; height: 8px; border-radius: 50%; background: hsl(var(--hue) 55% 52%); flex: none; }

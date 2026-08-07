@@ -1,0 +1,17 @@
+# Local Mac run. Same image as the zone; only the storage path and port differ.
+#
+# NOTE ON THE MAC AS A HOME: this machine sleeps (pmset sleep=1, womp=0), so a
+# laptop-hosted copy is unreachable from the phone exactly when you reach for the phone.
+# Treat this compose file as the dev loop; OpenHost is the 24/7 home. See README.
+services:
+  year-of-systems:
+    build: .
+    container_name: year-of-systems
+    ports:
+      - "8765:8080"
+    environment:
+      # Mirrors the variable OpenHost injects, so the code path is identical in both places.
+      OPENHOST_APP_DATA_DIR: /data/app_data/year-of-systems
+    volumes:
+      - ./data:/data/app_data/year-of-systems
+    restart: unless-stopped

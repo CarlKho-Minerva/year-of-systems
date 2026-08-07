@@ -1,0 +1,33 @@
+[app]
+name = "year-of-systems"
+version = "0.1.0"
+description = "52 weeks, one life system per week, across seven areas."
+authors = ["Carl Kho"]
+
+[runtime.container]
+image = "Dockerfile"
+port = 8080
+
+[routing]
+health_check = "/healthz"
+# No public_paths on purpose. Every route sits behind the router's owner login, which is
+# the correct default for a personal record. Adding "/" here would put a year of private
+# notes on the open internet.
+
+[resources]
+memory_mb = 128
+cpu_cores = 0.1
+
+# sqlite = ["main"] provisions a database in the backed-up permanent tier and exports its
+# path as OPENHOST_SQLITE_MAIN, which app.py reads first. The archive tier is explicitly
+# NOT used: the docs warn its close-to-open consistency can corrupt a SQLite WAL.
+[data]
+sqlite = ["main"]
+
+[[links]]
+name = "Export as Markdown"
+path = "/api/export.md"
+
+[[links]]
+name = "Export as JSON"
+path = "/api/export.json"

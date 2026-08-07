@@ -1,0 +1,118 @@
+{
+  "_comment": [
+    "Weeks 1-7 ship filled in so the app is usable the moment it boots and so every",
+    "field and category has a worked example. They are generic, widely-known systems",
+    "written for this repo and marked source:'starter' — they are NOT the Year of",
+    "Systems curriculum. Overwrite each one with the actual week's system as you reach",
+    "it (the UI shows a 'replace' badge on anything still marked starter), or bulk-load",
+    "your own list with seed_from_markdown.py.",
+    "Weeks 8-52 are created as empty slots with a rotating category, editable in-app."
+  ],
+  "systems": [
+    {
+      "week": 1,
+      "category": "physical",
+      "source": "starter",
+      "title": "Lay tomorrow's clothes out tonight",
+      "tool": "A chair",
+      "minutes": 5,
+      "why": "The gym decision is not made at 6am, it is made the night before. Removing the choice from the moment you are least able to make it is the whole trick. Costs nothing and survives a bad night's sleep.",
+      "steps": [
+        "Pick the surface: one chair, one hook, one spot. It is always that spot.",
+        "Tonight, put tomorrow's full kit there including socks and shoes.",
+        "Do it at a fixed trigger — right after brushing teeth works.",
+        "If you skip a morning, the clothes stay out. Do not reset the spot."
+      ]
+    },
+    {
+      "week": 2,
+      "category": "mind",
+      "source": "starter",
+      "title": "One capture inbox, emptied weekly",
+      "tool": "Whatever you already open fastest",
+      "minutes": 20,
+      "why": "Ideas are lost to fragmentation, not to forgetting. Five half-used capture tools means zero trusted ones. The value is not in the capturing, it is in having exactly one place you never have to think about.",
+      "steps": [
+        "Name the single inbox. Only one.",
+        "Delete or archive every competing capture app from your home screen.",
+        "Put the inbox in the phone dock, position one.",
+        "Book a recurring 15 minutes to empty it. Empty means empty."
+      ]
+    },
+    {
+      "week": 3,
+      "category": "relations",
+      "source": "starter",
+      "title": "The five-name list",
+      "tool": "A note, or a table",
+      "minutes": 15,
+      "why": "Relationships decay silently and on no schedule, so they lose every contest against work that has a deadline. Naming five people and tracking last contact converts an invisible decay into a visible number.",
+      "steps": [
+        "Write the five people you most want to still be close to in five years.",
+        "Next to each, write the date you last had a real conversation.",
+        "Reach out to whoever has the oldest date. Today.",
+        "Look at the list once a week. Contact the oldest. That is the entire system."
+      ]
+    },
+    {
+      "week": 4,
+      "category": "emotions",
+      "source": "starter",
+      "title": "Name it before you act on it",
+      "tool": "Voice memo or one line of text",
+      "minutes": 10,
+      "why": "The gap between feeling something and acting on it is where every avoidable decision goes wrong. Naming the state out loud is a reliable way to widen that gap without needing any insight.",
+      "steps": [
+        "Pick the trigger: the moment you notice you want to send something angry, quit something, or buy something.",
+        "Before acting, say or write one sentence: what the feeling is and what it wants you to do.",
+        "Wait until the next morning for anything irreversible.",
+        "Once a month, read back what you wrote. The pattern is the payoff."
+      ]
+    },
+    {
+      "week": 5,
+      "category": "money",
+      "source": "starter",
+      "title": "Automate the transfer, not the discipline",
+      "tool": "Your bank's scheduled transfer",
+      "minutes": 20,
+      "why": "Saving what is left over saves nothing, because nothing is ever left over. Moving the money on payday before it is visible converts a monthly act of willpower into a one-time setup.",
+      "steps": [
+        "Pick an amount low enough that you are certain it will not bounce.",
+        "Schedule the transfer for the day after income lands, recurring.",
+        "Put the destination account somewhere you cannot see it day to day.",
+        "Raise the amount only after three months of it never being a problem."
+      ]
+    },
+    {
+      "week": 6,
+      "category": "career",
+      "source": "starter",
+      "title": "The brag file",
+      "tool": "One append-only document",
+      "minutes": 10,
+      "why": "You cannot reconstruct a year of work from memory, and you always need it under time pressure — a review, an application, a filing. Appending as you go costs seconds; reconstructing costs a weekend and is worse.",
+      "steps": [
+        "Create one document. Append-only. Never reorganise it.",
+        "Every time something ships, lands, or is praised, paste it in with the date.",
+        "Include the raw evidence: the link, the message, the number.",
+        "Never edit for quality. Filtering is a job for the day you need it."
+      ]
+    },
+    {
+      "week": 7,
+      "category": "environ",
+      "source": "starter",
+      "title": "Reset one surface daily",
+      "tool": "None",
+      "minutes": 5,
+      "why": "Whole-house tidying fails because it needs a free afternoon you never have. One named surface, reset daily, holds the line — and the tidy surface tends to spread on its own.",
+      "steps": [
+        "Name the one surface that most wrecks the room when it is covered.",
+        "Attach the reset to something you already do daily, such as closing the laptop.",
+        "Two minutes maximum. If it takes longer, the surface is too big — pick a smaller one.",
+        "Do not add a second surface until the first is automatic."
+      ]
+    }
+  ]
+}
