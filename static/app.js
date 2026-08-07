@@ -12,8 +12,11 @@
 'use strict';
 
 const CACHE_KEY = 'yos.state.v1';
+const VIEWS = ['now', 'year', 'library', 'settings'];
 let S = null;              // current state
-let view = 'now';
+// The tab lives in the URL hash so a tab is linkable, the phone's back gesture works,
+// and the home-screen icon can be pinned straight to a tab if you ever want that.
+let view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'now';
 let editing = null;        // week number being edited, or null
 
 // ---------------------------------------------------------------- utils
@@ -249,12 +252,10 @@ function viewLibrary(root) {
         const b = el('button', { className: 'list-item', type: 'button' });
         b.style.setProperty('--hue', c.hue);
         b.append(el('span', { className: 'wk', textContent: 'W' + s.week }));
-        b.append(el('span', { className: 'ttl', textContent: s.title || '(empty)' }));
-        b.append(el('span', {
-          className: 'dot',
-          title: s.status,
-          style: s.status === 'installed' ? '' : 'opacity:.25',
-        }));
+        const ttl = el('span', { className: 'ttl', textContent: s.title || '(empty)' });
+        if (s.status === 'dropped') ttl.classList.add('struck');
+        b.append(ttl);
+        b.append(el('span', { className: 'dot ' + s.status, title: s.status }));
         b.addEventListener('click', () => { editing = s.week; render(); });
         holder.append(b);
       });
@@ -350,8 +351,20 @@ function link(label, href) {
 
 // ---------------------------------------------------------------- boot
 
+function go(next) {
+  view = next;
+  editing = null;
+  if (location.hash.slice(1) !== next) location.hash = next;
+  render();
+}
+
 document.querySelectorAll('.tab').forEach((t) =>
-  t.addEventListener('click', () => { view = t.dataset.view; editing = null; render(); }));
+  t.addEventListener('click', () => go(t.dataset.view)));
+
+window.addEventListener('hashchange', () => {
+  const h = location.hash.slice(1);
+  if (VIEWS.includes(h) && h !== view) { view = h; editing = null; render(); }
+});
 
 load().catch((e) => {
   $('#view').innerHTML = '';

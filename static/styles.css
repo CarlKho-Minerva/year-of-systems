@@ -117,16 +117,16 @@ h2 { font-size: 1.05rem; margin: 26px 0 10px; letter-spacing: -.01em; }
 /* ---------------------------------------------------------------- buttons */
 
 .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-button.btn {
+.btn {
   font: inherit; font-size: .88rem; font-weight: 600;
   padding: 11px 16px; border-radius: 10px; cursor: pointer;
   border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
   min-height: 44px;   /* Apple's minimum tap target. Below this it feels broken on a phone. */
 }
-button.btn:active { transform: scale(.985); }
-button.btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1200; }
-button.btn.ghost { background: none; color: var(--muted); }
-button.btn.danger { color: #ff8a8a; }
+.btn:active { transform: scale(.985); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1200; }
+.btn.ghost { background: none; color: var(--muted); }
+.btn.danger { color: #ff8a8a; }
 
 /* ---------------------------------------------------------------- grid */
 
@@ -196,4 +196,9 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 }
 .list-item .wk { color: var(--faint); font-size: .72rem; font-variant-numeric: tabular-nums; flex: none; width: 26px; }
 .list-item .ttl { flex: 1; font-size: .92rem; }
-.list-item .dot { width: 8px; height: 8px; border-radius: 50%; background: hsl(var(--hue) 55% 52%); flex: none; }
+.list-item .ttl.struck { text-decoration: line-through; color: var(--faint); }
+/* Three states must be tellable apart at a glance, or the Library quietly turns into a
+   list that reads as "all installed". Solid = installed, hollow = planned, grey = dropped. */
+.list-item .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: hsl(var(--hue) 55% 52%); }
+.list-item .dot.planned { background: none; border: 1.5px solid var(--faint); }
+.list-item .dot.dropped { background: var(--drop); }
