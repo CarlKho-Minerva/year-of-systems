@@ -139,6 +139,20 @@ failure this system is built not to have.
 The seeder posts to `/api/import`, which sits behind owner login on OpenHost — run it
 against a local instance and move the SQLite file, or paste into the UI.
 
+## The weekly nudge
+
+`make_calendar.py` emits a single recurring calendar event — Mondays 08:00, through week
+52 — and prints the path. Open it and Calendar asks which calendar to file it under.
+
+    python3 make_calendar.py        # reads the start date from the live app
+
+This deliberately replaced a launchd job that wrote an Apple Reminder each week. Two
+reasons. Carl runs his life off Google Calendar and does not check a reminders list, so
+that nudge was landing where he would never see it — which is worse than no nudge,
+because it looks like coverage. And a job that must fire 52 times is 52 chances to die
+silently; an RRULE is evaluated by the calendar itself, so there is no process to
+monitor and nothing to rot.
+
 ## Getting the data out
 
 Nothing is trapped. Settings → Export, or:
