@@ -1,7 +1,12 @@
 # year-of-systems
 
-52 weeks, one life system per week, across seven areas: Physical Health, Mind,
-Relationships, Emotions, Money, Career, Environment.
+52 weeks, one life system per week — plus a reader for the course's 61 lessons.
+
+The course's real shape is **11 modules**, which is *not* the seven areas the sales page
+advertises: Course Orientation (5 lessons), Starter Pack (12), Physical Health (5),
+Emotions (4), Mind (5), Relationships (4), Career (8), Money (5), Environment (9), Bonus
+(3), Graduation (1). Weeks 1–12 are a mixed Starter Pack that cuts across every area, so
+the tracker's categories mirror the modules rather than the marketing.
 
 A local-only web app. No API key, no CDN, no webfont, no analytics, no outbound request
 of any kind. Python stdlib + SQLite + three static files. It runs on OpenHost, in Docker
@@ -103,41 +108,35 @@ POST /api/course/import
 
 The response reports `lessons_new`, `lessons_updated`, and `notes_preserved`.
 
-## Loading your own 52 systems
+## Loading the course
 
-Weeks 1–7 ship filled in as **generic starter examples** — one per category, so nothing
-is blank and every field has a worked example. They carry a `starter — replace` badge.
-They are not anyone's course curriculum; overwrite each as you reach it.
-
-Weeks 8–52 are empty slots with a rotating category, editable in the app.
-
-To bulk-load, write markdown and push it:
-
-```markdown
-## Week 3 — The five-name list
-category: relations
-tool: A note
-minutes: 15
-
-Relationships decay silently and on no schedule, so they lose every contest
-against work that has a deadline.
-
-- Write the five people you want to still be close to in five years.
-- Note the date you last had a real conversation with each.
-```
+Scrape it with the Claude Chrome extension, clean it, then import:
 
 ```bash
-python3 seed_from_markdown.py my-systems.md --dry-run   # parse and show, send nothing
-python3 seed_from_markdown.py my-systems.md             # against localhost:8765
-python3 seed_from_markdown.py my-systems.md --overwrite # replace weeks that already have a title
+# 1. In Chrome, logged into the course: extract via javascript_tool using same-origin
+#    fetch (61 pages, not 61 navigations). Paginate EVERY module's category page with
+#    ?page=N — the syllabus hides Wk 11-12 behind "Show More" and you silently get 59.
+# 2. Clean the scrape. Exits non-zero naming any lesson it could not clean.
+python3 clean_export.py ~/Downloads/yos-course-export.json /tmp/yos-course-clean.json
+
+# 3. Import. The `--` is REQUIRED or oh's argparse eats -X.
+oh curl -- -sS -X POST -H "Content-Type: application/json" \
+  --data-binary @/tmp/yos-course-clean.json \
+  "https://year-of-systems.carl.selfhost.imbue.com/api/course/import"
 ```
 
-It refuses to overwrite a week that already has a title unless you pass `--overwrite`,
-and exits non-zero if any item was rejected. A silent partial import is exactly the
-failure this system is built not to have.
+A lesson titled `Wk 8: Weekly Meal Plan` **is** week 8, so the import derives the link
+from the title and populates the tracker: title, summary, category from the module, and
+setup steps parsed from the `Step N:` lines. That is what keeps the reader and the
+tracker one system instead of two lists that drift.
 
-The seeder posts to `/api/import`, which sits behind owner login on OpenHost — run it
-against a local instance and move the SQLite file, or paste into the UI.
+Three orientation lessons are video-only and have no body text. That is correct, not a
+scrape failure — the cleaner only errors when a lesson has neither text nor video.
+
+To write your own weeks instead, `seed_from_markdown.py` takes
+`## Week 3 — Title` headings with optional `category:`/`tool:`/`minutes:` lines, bullet
+steps, and prose. It refuses to overwrite a week that already has a title unless you pass
+`--overwrite`, and exits non-zero if anything was rejected.
 
 ## The weekly nudge
 
@@ -168,7 +167,9 @@ Both are also linked from the app's OpenHost dashboard page.
 app.py                  HTTP server + SQLite + JSON API   (stdlib only)
 systems.json            week 1-7 starter seed; 8-52 generated as empty slots
 make_icons.py           generates the PWA icons from code, no Pillow
-seed_from_markdown.py   bulk import tool
+clean_export.py         turns a raw Kajabi scrape into importable JSON
+make_calendar.py        emits the recurring weekly calendar event
+seed_from_markdown.py   bulk import tool for your own weeks
 openhost.toml           OpenHost manifest
 Dockerfile              alpine + interpreter, no dependency install step
 docker-compose.yml      local Mac run
@@ -183,12 +184,18 @@ static/                 index.html, app.js, styles.css, sw.js, manifest, icons
 | POST | `/api/system/{1-52}` | patch any field, status, or steps; returns fresh state |
 | POST | `/api/settings` | `{"start_date": "YYYY-MM-DD"}`, snaps to that Monday |
 | POST | `/api/import` | `{"systems": [...], "overwrite": bool}` → per-week report |
+| GET | `/api/course` | module + lesson tree, **without** bodies (small enough for a phone) |
+| GET | `/api/lesson/{id}` | one lesson: body, video, assets, notes, prev/next |
+| POST | `/api/lesson/{id}` | `{"notes": "...", "week": 1-52\|null}` |
+| POST | `/api/course/import` | full course tree → new/updated/notes-preserved report |
 | GET | `/api/export.md` · `/api/export.json` | downloads |
+| GET | `/api/export-notes.md` | **your notes only** — never the lesson text |
 | GET | `/healthz` | health check, wired to `[routing].health_check` |
 
 ## What is not here
 
 The Year of Systems course content itself — its videos, lesson text, and scripts — is Ben
 Meer's copyrighted material and is not reproduced or redistributed here. This repo is the
-scaffolding: the week structure, the seven categories, and a place to keep your own notes
-on what you actually installed and whether it stuck.
+scaffolding: the week structure, the module categories, and a place to keep your own notes
+on what you actually installed and whether it stuck. The lessons you import live in SQLite
+on your own instance and are never written to this repo.
