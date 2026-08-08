@@ -43,7 +43,10 @@ REVIEW_AFTER_DAYS = 30
 
 STATUSES = ("planned", "installed", "dropped")
 
+# These mirror the course's actual modules, which are NOT the seven areas the marketing
+# copy lists: weeks 1-12 are a mixed "Starter Pack" that cuts across all of them.
 CATEGORIES = [
+    {"key": "starter",  "label": "Starter Pack",    "hue": 200},
     {"key": "physical", "label": "Physical Health", "hue": 142},
     {"key": "mind",     "label": "Mind",            "hue": 262},
     {"key": "relations","label": "Relationships",   "hue": 340},
@@ -53,6 +56,13 @@ CATEGORIES = [
     {"key": "environ",  "label": "Environment",     "hue": 48},
 ]
 CAT_KEYS = [c["key"] for c in CATEGORIES]
+
+# Course module title -> tracker category.
+MODULE_CATEGORY = {
+    "starter pack": "starter", "physical health": "physical", "mind": "mind",
+    "relationships": "relations", "emotions": "emotions", "money": "money",
+    "career": "career", "environment": "environ",
+}
 
 _lock = threading.Lock()
 
@@ -367,6 +377,38 @@ def update_lesson(lid: int, patch: dict):
         db.close()
 
 
+WEEK_IN_TITLE = re.compile(r"^\s*wk\.?\s*(\d{1,2})\s*[:.\-—]\s*(.+)$", re.I)
+STEP_LINE = re.compile(r"^\s*step\s*\d+\s*[:.\-—]\s*(.+?)\s*$", re.I)
+SUMMARY = re.compile(r"the system:\s*(.+?)(?:\n\s*the outcome|\n\s*setup|\Z)", re.I | re.S)
+
+
+def sync_system_from_lesson(db, week: int, title: str, body: str, category: str):
+    """Mirror a 'Wk N:' lesson into the tracker row for that week.
+
+    Never touches notes, status, or the install dates — those are Carl's, and a re-import
+    after the course is revised must not silently reset a system he already installed.
+    A week he has edited himself (source='mine') is left completely alone.
+    """
+    cur = db.execute("SELECT source, steps FROM systems WHERE week=?", (week,)).fetchone()
+    if cur is None or cur["source"] == "mine":
+        return False
+
+    m = SUMMARY.search(body or "")
+    why = re.sub(r"\s*\n\s*", " ", m.group(1)).strip() if m else ""
+
+    steps = [s.group(1) for s in (STEP_LINE.match(ln) for ln in (body or "").split("\n")) if s]
+    # Keep any ticks the old steps already had, matched on text.
+    prev = {x.get("text"): x.get("done") for x in json.loads(cur["steps"] or "[]")}
+    step_json = json.dumps([{"text": t[:500], "done": bool(prev.get(t))} for t in steps[:40]])
+
+    db.execute(
+        "UPDATE systems SET title=?, why=?, category=?, steps=?, source='course', updated_at=?"
+        " WHERE week=?",
+        (title[:200], why[:4000], category, step_json,
+         datetime.now(timezone.utc).isoformat(timespec="seconds"), week))
+    return True
+
+
 def import_course(body):
     """Ingest a scraped course tree.
 
@@ -377,7 +419,8 @@ def import_course(body):
     mods = body.get("modules")
     if not isinstance(mods, list):
         raise ValueError('expected {"modules": [{"title":..,"lessons":[...]}, ...]}')
-    report = {"modules": 0, "lessons_new": 0, "lessons_updated": 0, "notes_preserved": 0}
+    report = {"modules": 0, "lessons_new": 0, "lessons_updated": 0, "notes_preserved": 0,
+              "weeks_linked": 0, "systems_synced": 0}
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with _lock:
         db = connect()
@@ -407,8 +450,8 @@ def import_course(body):
                     existing = db.execute(
                         "SELECT id, notes FROM lessons WHERE module_id=? AND title=?",
                         (mid, ltitle)).fetchone()
-                vals = (mid, li, ltitle, str(l.get("body", "")), str(l.get("video_url", "")),
-                        assets, lurl, now)
+                lbody = str(l.get("body", ""))
+                vals = (mid, li, ltitle, lbody, str(l.get("video_url", "")), assets, lurl, now)
                 if existing:
                     db.execute(
                         "UPDATE lessons SET module_id=?, position=?, title=?, body=?,"
@@ -422,6 +465,21 @@ def import_course(body):
                         "INSERT INTO lessons (module_id,position,title,body,video_url,"
                         "assets,source_url,updated_at) VALUES (?,?,?,?,?,?,?,?)", vals)
                     report["lessons_new"] += 1
+
+                # A lesson called "Wk 8: Weekly Meal Plan" IS week 8 of the tracker.
+                # Deriving the link from the title is what makes the reader and the
+                # tracker one system instead of two lists that drift apart.
+                wm = WEEK_IN_TITLE.match(ltitle)
+                explicit = l.get("week")
+                wk = int(explicit) if explicit else (int(wm.group(1)) if wm else None)
+                if wk and 1 <= wk <= 52:
+                    db.execute("UPDATE lessons SET week=? WHERE source_url=? OR (module_id=? AND title=?)",
+                               (wk, lurl, mid, ltitle))
+                    report["weeks_linked"] += 1
+                    cat = MODULE_CATEGORY.get(mtitle.strip().lower())
+                    if cat and sync_system_from_lesson(
+                            db, wk, (wm.group(2) if wm else ltitle), lbody, cat):
+                        report["systems_synced"] += 1
         db.commit()
         db.close()
     log.info("course import: %s", report)

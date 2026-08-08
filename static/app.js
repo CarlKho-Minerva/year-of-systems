@@ -288,9 +288,7 @@ function viewLesson(root, l) {
 
   if (l.body) {
     const card = el('div', { className: 'card' });
-    // Rendered as text, not HTML. The body is scraped from a third-party page, and
-    // injecting it as markup would make any script or tracker in that page run here.
-    card.append(el('div', { className: 'body', textContent: l.body }));
+    card.append(renderBody(l.body));
     root.append(card);
   } else {
     root.append(el('p', { className: 'empty', textContent: 'No text captured for this lesson — use "Open original".' }));
@@ -323,6 +321,28 @@ function viewLesson(root, l) {
   if (l.prev_id) nav.append(btn('‹ Previous', '', () => openLessonById(l.prev_id)));
   if (l.next_id) nav.append(btn('Next ›', '', () => openLessonById(l.next_id)));
   if (nav.children.length) root.append(nav);
+}
+
+/* The lesson body arrives as plain text with a consistent shape: a few section labels
+ * ("The System:", "The Outcome", "Setup"), numbered steps, and prose. Promoting those to
+ * headings is the difference between a wall of text and something readable on a phone.
+ *
+ * Every line becomes a TEXT node — never innerHTML. The body is scraped from a page this
+ * app does not control, so treating it as markup would run whatever that page carries.
+ */
+const SECTION = /^(the system:?|the outcome:?|setup:?|why it works:?|the payoff:?|notes?:?|tools?:?|examples?:?)$/i;
+const STEP = /^step\s*\d+\s*[:.\-—]/i;
+
+function renderBody(text) {
+  const wrap = el('div', { className: 'body' });
+  for (const raw of String(text).split('\n')) {
+    const line = raw.trim();
+    if (!line) { wrap.append(el('div', { className: 'gap' })); continue; }
+    if (SECTION.test(line)) { wrap.append(el('h3', { className: 'sec', textContent: line.replace(/:$/, '') })); continue; }
+    if (STEP.test(line)) { wrap.append(el('h4', { className: 'step', textContent: line })); continue; }
+    wrap.append(el('p', { textContent: line }));
+  }
+  return wrap;
 }
 
 function extLink(label, href) {

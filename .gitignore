@@ -2,3 +2,7 @@ data/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Scraped course content must never enter this public repo.
+yos-course-*.json
+*-course-export*.json

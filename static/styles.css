@@ -204,12 +204,20 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .list-item .dot.dropped { background: var(--drop); }
 .list-item .marks { color: var(--faint); font-size: .74rem; flex: none; letter-spacing: .05em; }
 
-/* Lesson body. Long-form reading, so it gets a wider measure and looser leading than the
-   UI text around it. white-space:pre-wrap preserves the paragraph breaks of the scraped
-   source without needing a markdown renderer. */
-.body {
-  white-space: pre-wrap;
-  font-size: .97rem;
-  line-height: 1.68;
-  overflow-wrap: anywhere;
+/* Lesson body. Long-form reading, so looser leading than the UI text around it. Built
+   from real elements (see renderBody) rather than one pre-wrap blob, so the section
+   labels and numbered steps can carry weight and spacing. */
+.body { font-size: .97rem; line-height: 1.66; overflow-wrap: anywhere; }
+.body p { margin: 0 0 .5em; }
+.body .gap { height: .5em; }
+.body .sec {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--accent); margin: 1.5em 0 .5em; font-weight: 700;
 }
+.body .sec:first-child { margin-top: 0; }
+.body .step {
+  font-size: .95rem; font-weight: 700; margin: 1.4em 0 .5em;
+  padding-left: .7em; border-left: 3px solid hsl(210 45% 50% / .55);
+}
+/* A gap directly before a heading would double the space the heading already sets. */
+.body .gap + .sec, .body .gap + .step { margin-top: 0; }
