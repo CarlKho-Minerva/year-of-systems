@@ -140,17 +140,30 @@ steps, and prose. It refuses to overwrite a week that already has a title unless
 
 ## The weekly nudge
 
-`make_calendar.py` emits a single recurring calendar event — Mondays 08:00, through week
-52 — and prints the path. Open it and Calendar asks which calendar to file it under.
+A single recurring Google Calendar event, written through the API — Mondays 08:00,
+51 occurrences, through week 52.
 
-    python3 make_calendar.py        # reads the start date from the live app
+```bash
+~/.local/venvs/gmail-mcp/bin/python ~/CODELocalProjects/lifeos/gcal.py upsert \
+  --key yos-weekly --calendar primary \
+  --summary "Year of Systems — install this week's system" \
+  --start 2026-08-10T08:00 --rrule "FREQ=WEEKLY;BYDAY=MO;COUNT=51" \
+  --tz America/Los_Angeles --url "https://year-of-systems.carl.selfhost.imbue.com/"
+```
 
-This deliberately replaced a launchd job that wrote an Apple Reminder each week. Two
-reasons. Carl runs his life off Google Calendar and does not check a reminders list, so
-that nudge was landing where he would never see it — which is worse than no nudge,
-because it looks like coverage. And a job that must fire 52 times is 52 chances to die
-silently; an RRULE is evaluated by the calendar itself, so there is no process to
-monitor and nothing to rot.
+`--key` makes it idempotent: the event is looked up by that key before writing, so
+re-running updates the existing event instead of stacking a duplicate every time.
+
+This replaced two worse designs, in order. First a launchd job writing an Apple Reminder
+— Carl runs his life off Google Calendar and does not check a reminders list, so that
+landed where he would never see it. Then a generated `.ics`, which was no better: `open`
+launches Apple Calendar, still the wrong app, and it interrupts him to do by hand what an
+API does silently. Writing to the Google Calendar API is the only version that puts the
+nudge where he looks without taking over his screen.
+
+A single RRULE also removes the machinery entirely. A job that must fire 52 times is 52
+chances to die silently; a recurrence is evaluated by the calendar itself, so there is no
+process to monitor and nothing to rot.
 
 ## Getting the data out
 
@@ -168,7 +181,6 @@ app.py                  HTTP server + SQLite + JSON API   (stdlib only)
 systems.json            week 1-7 starter seed; 8-52 generated as empty slots
 make_icons.py           generates the PWA icons from code, no Pillow
 clean_export.py         turns a raw Kajabi scrape into importable JSON
-make_calendar.py        emits the recurring weekly calendar event
 seed_from_markdown.py   bulk import tool for your own weeks
 openhost.toml           OpenHost manifest
 Dockerfile              alpine + interpreter, no dependency install step
